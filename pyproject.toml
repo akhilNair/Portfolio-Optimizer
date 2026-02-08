@@ -5,16 +5,16 @@ description = "Agentic portfolio optimization engine for structured notes"
 requires-python = ">=3.11"
 
 dependencies = [
-    # Agent Orchestration
+    # Agent Orchestration (used by agent nodes + sentiment, NOT by PDF parser)
     "langgraph>=1.0.0,<2.0",
     "langchain-core>=0.3.0",
     "langchain-anthropic>=0.3.0",
     "langchain-community>=0.3.0",
 
-    # LLM
+    # LLM (agent nodes + sentiment only)
     "anthropic>=0.40.0",
 
-    # PDF Parsing
+    # PDF Parsing (deterministic — no LLM cost)
     "pdfplumber>=0.11.0",
     "PyMuPDF>=1.24.0",
 

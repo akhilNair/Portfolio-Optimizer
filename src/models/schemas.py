@@ -41,8 +41,10 @@ class OptimizationObjective(str, Enum):
 class AssetInBasket(BaseModel):
     """Single asset within a structured note's underlying basket."""
 
-    ticker: str
+    ticker: Optional[str] = None
     name: str
+    isin: Optional[str] = None
+    ticker_bloomberg: Optional[str] = None
     weight_in_note: Optional[float] = None
     initial_fixing: Optional[float] = None
 
