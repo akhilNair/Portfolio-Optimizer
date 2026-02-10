@@ -10,9 +10,13 @@ from langchain_core.messages import AIMessage, HumanMessage
 from src.agent.state import AgentState
 from src.market.data_fetcher import MarketDataFetcher
 from src.market.sentiment import SentimentAnalyzer
+from src.market.ticker_resolver import TickerResolver
+import re
+
 from src.models.schemas import (
     AnalystRequest,
     OptimizationObjective,
+    PayoffType,
     PortfolioWeights,
 )
 from src.optimization.black_litterman import BlackLittermanBlender
@@ -21,6 +25,33 @@ from src.optimization.realtime import RealTimeOptimizer
 from src.pdf.retriever import NoteRetriever
 
 llm = ChatAnthropic(model="claude-sonnet-4-20250514", temperature=0.0)
+ticker_resolver = TickerResolver()
+
+# Valid enum values for normalizing LLM output
+_PAYOFF_TYPE_VALUES = {pt.value for pt in PayoffType}
+_RISK_VALUES = {"conservative", "moderate", "aggressive"}
+
+
+def _normalize_parsed_data(data: dict) -> dict:
+    """Normalize LLM JSON output to match Pydantic enum values."""
+    # Normalize payoff type: "Barrier Reverse Convertible" → "barrier_reverse_convertible"
+    pt = data.get("desired_payoff_type")
+    if pt and isinstance(pt, str):
+        normalized = re.sub(r"[\s\-]+", "_", pt.strip()).lower()
+        if normalized in _PAYOFF_TYPE_VALUES:
+            data["desired_payoff_type"] = normalized
+        else:
+            data["desired_payoff_type"] = None
+
+    # Normalize risk tolerance — default to "moderate" if missing or null
+    rt = data.get("risk_tolerance")
+    if not rt or not isinstance(rt, str):
+        data["risk_tolerance"] = "moderate"
+    else:
+        rt_lower = rt.strip().lower()
+        data["risk_tolerance"] = rt_lower if rt_lower in _RISK_VALUES else "moderate"
+
+    return data
 
 
 def _map_risk_to_objective(risk_tolerance: str) -> OptimizationObjective:
@@ -63,6 +94,7 @@ User request: {last_message.content}"""
         if content.startswith("```"):
             content = content.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         data = json.loads(content)
+        data = _normalize_parsed_data(data)
         request = AnalystRequest(**data)
         return {
             "analyst_request": request,
@@ -79,6 +111,8 @@ User request: {last_message.content}"""
             ],
         }
     except Exception as e:
+        print(f"[parse_request] LLM raw response: {response.content}")
+        print(f"[parse_request] Parse error: {e}")
         return {
             "error": f"Could not parse request: {e}",
             "current_step": "parse_request",
@@ -122,9 +156,13 @@ def retrieve_notes_node(state: AgentState) -> dict:
         top_k=10,
     )
 
-    all_tickers = list(
-        {asset.ticker for note in matched_notes for asset in note.underlying_basket}
-    )
+    # Resolve each asset to a yfinance ticker via ISIN/Bloomberg/name lookup
+    all_tickers = []
+    for note in matched_notes:
+        for asset in note.underlying_basket:
+            resolved = ticker_resolver.resolve(asset)
+            if resolved and resolved not in all_tickers:
+                all_tickers.append(resolved)
 
     return {
         "matched_notes": matched_notes,
@@ -152,6 +190,7 @@ def expand_search_node(state: AgentState) -> dict:
 in sectors {request.sector_preferences}, suggest 5-8 liquid US equity
 tickers that would form a good underlying basket.
 Return as a JSON array of strings only, no other text."""
+    print('Prompt for ticker suggestion:', prompt)
 
     response = llm.invoke([HumanMessage(content=prompt)])
     try:

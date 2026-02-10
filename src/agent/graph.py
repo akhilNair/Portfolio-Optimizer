@@ -16,9 +16,10 @@ def should_clarify(state: AgentState) -> str:
 
 
 def has_matches(state: AgentState) -> str:
-    """Route after retrieve_notes: if no notes matched, expand search."""
+    """Route after retrieve_notes: if no notes matched or no tickers resolved, expand search."""
     matched = state.get("matched_notes")
-    if not matched or len(matched) == 0:
+    tickers = state.get("candidate_tickers")
+    if not matched or len(matched) == 0 or not tickers or len(tickers) == 0:
         return "expand_search"
     return "step1_optimize"
 
@@ -46,8 +47,8 @@ def build_graph() -> StateGraph:
         {"clarify": "clarify", "retrieve_notes": "retrieve_notes"},
     )
 
-    # Clarify loops back to parse
-    graph.add_edge("clarify", "parse_request")
+    # Clarify ends the graph; the caller re-invokes with the user's follow-up
+    graph.add_edge("clarify", END)
 
     # Conditional: notes found or expand search
     graph.add_conditional_edges(

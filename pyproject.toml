@@ -23,14 +23,14 @@ dependencies = [
     "sentence-transformers>=3.0.0",
 
     # Optimization
-    "cvxpy>=1.5.0",
+    "cvxpy>=1.5.0,<1.7",
     "osqp>=0.6.0",
 
     # Market Data
     "yfinance>=0.2.40",
 
-    # Data
-    "numpy>=1.26.0,<2.1",
+    # Data (numpy <2.0 required for PyTorch 2.2.x on x86_64 macOS)
+    "numpy>=1.26.0,<2.0",
     "pandas>=2.1.0",
     "pydantic>=2.5.0",
 

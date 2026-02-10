@@ -92,7 +92,17 @@ class NoteRetriever:
         return filtered_notes
 
     def _load_note(self, note_id: str) -> Optional[StructuredNote]:
-        """Load StructuredNote from the JSON cache by scanning cache files."""
+        """Load StructuredNote from the JSON cache by note_id."""
+        # Try direct lookup first (files named {note_id}.json)
+        direct_path = self.cache_dir / f"{note_id}.json"
+        if direct_path.exists():
+            try:
+                data = json.loads(direct_path.read_text())
+                return StructuredNote(**data)
+            except Exception:
+                pass
+
+        # Fallback: scan all cache files
         for cache_file in self.cache_dir.glob("*.json"):
             try:
                 data = json.loads(cache_file.read_text())
